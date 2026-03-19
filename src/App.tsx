@@ -1,638 +1,640 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  Mail, Phone, Briefcase, GraduationCap, Award, Globe2,
-  BookOpen, CalendarDays, Heart, Flag, Scale, Target, Send,
-  ChevronRight, UserCircle, Menu, X, MapPin, Star, TrendingUp,
-  Users, Zap, Check
-} from 'lucide-react';
-import profilePhoto from './assets/photo.png';
-import signaturePhoto from './assets/sign.png';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   TYPES
+───────────────────────────────────────────── */
+interface Star { id: number; x: number; y: number; r: number; delay: number; dur: number; }
+interface Particle { id: number; x: number; y: number; size: number; color: string; delay: number; angle: number; }
+interface FloatingHeart { id: number; x: number; size: number; delay: number; dur: number; color: string; }
 
-interface ExperienceItem {
-  company: string;
-  role: string;
-  responsibilities: string[];
-  period?: string;
-}
+/* ─────────────────────────────────────────────
+   CONSTANTS
+───────────────────────────────────────────── */
 
-interface EducationItem {
-  institution: string;
-  degree: string;
-  year: string;
-}
-
-interface DetailItemProps {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-}
-
-interface ExperienceCardProps extends ExperienceItem { }
-interface EducationCardProps extends EducationItem { }
-interface NavItemProps {
-  section: string;
-  label: string;
-  activeSection: string;
-  onClick: () => void;
-}
-
-// ─── Data ──────────────────────────────────────────────────────────────────
-
-const experienceData: ExperienceItem[] = [
-  {
-    company: "Aakash Universal Limited",
-    role: "Supervisor",
-    period: "Aakash Italian Marble",
-    responsibilities: [
-      "Supervised daily operations and workflow efficiency",
-      "Managed team coordination and productivity targets",
-      "Ensured smooth and compliant business operations",
-    ],
-  },
-  {
-    company: "Jai Shree Balaji",
-    role: "Sales Executive",
-    period: "Kishangarh",
-    responsibilities: [
-      "Handled customer interactions and end-to-end sales",
-      "Worked in a high-performance team environment",
-      "Built lasting positive customer relationships",
-    ],
-  },
-  {
-    company: "EBT Marmo",
-    role: "Senior Sales Executive",
-    period: "Agra",
-    responsibilities: [
-      "Managed high-level sales and key client accounts",
-      "Built and maintained strong customer relationships",
-      "Contributed significantly to business revenue growth",
-    ],
-  },
-  {
-    company: "Millennium Marble",
-    role: "Sales Executive",
-    period: "Silvassa",
-    responsibilities: [
-      "Managed customer dealing and premium product sales",
-      "Handled diverse client requirements professionally",
-      "Strengthened sales performance through experience",
-    ],
-  },
+const HEART_COLORS = [
+  '#ff6eb4', '#ff2d78', '#ff9de2', '#c084fc',
+  '#f472b6', '#fb7185', '#e879f9', '#f9a8d4'
 ];
 
-const educationData: EducationItem[] = [
-  { institution: "SK College, Sikar", degree: "Bachelor of Arts (B.A)", year: "2011" },
-  { institution: "Govt. Higher Secondary School, Danta", degree: "12th Standard", year: "2008" },
-  { institution: "Govt. Senior Secondary School, Danta", degree: "10th Standard", year: "2006" },
-];
 
-const skills: string[] = [
-  "Sales & Negotiation",
-  "Team Building",
-  "Customer Relationship Management",
-  "Innovative Thinking",
-  "Hard Work & Dedication",
-  "Business Development",
-];
+const RELATIONSHIP_START = new Date("2024-09-19T00:00:00");
 
-const languages: string[] = ["Hindi", "English", "Nagamis"];
-const interests: string[] = ["Farming", "Sports", "Cricket", "Dancing", "Reading"];
+/* ─────────────────────────────────────────────
+   UTILS
+───────────────────────────────────────────── */
 
-const navSections = [
-  { id: 'home', label: 'Home' },
-  { id: 'about', label: 'About' },
-  { id: 'experience', label: 'Experience' },
-  { id: 'education', label: 'Education' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'contact', label: 'Contact' },
-];
 
-// ─── Sub-Components ────────────────────────────────────────────────────────
+function isInsideHeart(nx: number, ny: number): boolean {
+  const term1 = Math.pow(nx * nx + ny * ny - 1, 3);
+  const term2 = nx * nx * Math.pow(ny, 3);
+  return term1 - term2 <= 0;
+}
 
-const NavItem: React.FC<NavItemProps> = ({ section, label, activeSection, onClick }) => (
-  <a
-    href={`#${section}`}
-    onClick={onClick}
-    className={`block px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${activeSection === section
-        ? 'bg-amber-500 text-stone-900 shadow-md'
-        : 'text-stone-300 hover:text-white hover:bg-stone-700'
-      }`}
-  >
-    {label}
-  </a>
-);
+/* ─────────────────────────────────────────────
+   SUB-COMPONENTS
+───────────────────────────────────────────── */
 
-const ExperienceCard: React.FC<ExperienceCardProps> = ({ role, company, period, responsibilities }) => (
-  <div className="group relative bg-stone-800/60 border border-stone-700/50 rounded-2xl p-5 hover:border-amber-500/40 hover:bg-stone-800/90 transition-all duration-300 shadow-lg hover:shadow-amber-900/20 hover:shadow-xl">
-    <div className="flex items-start gap-3 mb-4">
-      <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-        <Briefcase className="w-5 h-5 text-amber-400" />
-      </div>
-      <div className="min-w-0">
-        <h4 className="text-white font-bold text-base leading-tight">{role}</h4>
-        <p className="text-amber-400 text-sm font-medium truncate">{company}</p>
-        {period && <p className="text-stone-400 text-xs mt-0.5">{period}</p>}
-      </div>
-    </div>
-    <ul className="space-y-2">
-      {responsibilities.map((resp, index) => (
-        <li key={index} className="flex items-start gap-2 text-stone-300 text-sm leading-relaxed">
-          <Check className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-          <span>{resp}</span>
-        </li>
-      ))}
-    </ul>
-  </div>
-);
-
-const EducationCard: React.FC<EducationCardProps> = ({ institution, degree, year }) => (
-  <div className="bg-stone-800/60 border border-stone-700/50 rounded-2xl p-5 hover:border-amber-500/30 transition-all duration-300">
-    <div className="flex items-center gap-2 mb-2">
-      <GraduationCap className="w-4 h-4 text-amber-400 flex-shrink-0" />
-      <span className="text-amber-400 text-xs font-mono font-semibold bg-amber-500/10 px-2 py-0.5 rounded-full">{year}</span>
-    </div>
-    <h4 className="text-white font-bold text-base mb-1">{degree}</h4>
-    <p className="text-stone-400 text-sm">{institution}</p>
-  </div>
-);
-
-const DetailItem: React.FC<DetailItemProps> = ({ icon: Icon, label, value }) => (
-  <div className="flex items-center gap-3 py-3 border-b border-stone-700/50 last:border-none">
-    <div className="w-8 h-8 rounded-lg bg-stone-700/50 flex items-center justify-center flex-shrink-0">
-      <Icon className="w-4 h-4 text-amber-400" />
-    </div>
-    <div>
-      <p className="text-stone-400 text-xs">{label}</p>
-      <p className="text-white text-sm font-semibold">{value}</p>
-    </div>
-  </div>
-);
-
-// ─── Animated Section Wrapper ──────────────────────────────────────────────
-
-const FadeSection: React.FC<{ id: string; children: React.ReactNode; className?: string }> = ({
-  id, children, className = ''
-}) => {
-  const ref = useRef<HTMLElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
-      { threshold: 0.08 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+// ── Twinkling Stars Background ──
+const StarField: React.FC<{ count?: number }> = ({ count = 120 }) => {
+  const stars = useMemo<Star[]>(() =>
+    Array.from({ length: count }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      r: Math.random() * 2 + 0.5,
+      delay: Math.random() * 4,
+      dur: Math.random() * 3 + 2,
+    })), [count]);
 
   return (
-    <section
-      ref={ref}
-      id={id}
-      className={`transition-all duration-700 ease-out ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
-        } ${className}`}
-    >
-      {children}
-    </section>
+    <svg className="fixed inset-0 w-full h-full z-0 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+      {stars.map(s => (
+        <motion.circle
+          key={s.id}
+          cx={`${s.x}%`} cy={`${s.y}%`} r={s.r}
+          fill="white"
+          initial={{ opacity: 0.1 }}
+          animate={{ opacity: [0.1, 0.9, 0.1] }}
+          transition={{ duration: s.dur, delay: s.delay, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ))}
+    </svg>
   );
 };
 
-// ─── Section Heading ───────────────────────────────────────────────────────
-
-const SectionHeading: React.FC<{ icon: React.ElementType; title: string; subtitle?: string }> = ({
-  icon: Icon, title, subtitle
-}) => (
-  <div className="mb-8">
-    <div className="flex items-center gap-3 mb-2">
-      <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-        <Icon className="w-5 h-5 text-amber-400" />
-      </div>
-      <h3 className="text-2xl font-extrabold text-white tracking-tight">{title}</h3>
-    </div>
-    {subtitle && <p className="text-stone-400 text-sm ml-13 pl-[52px]">{subtitle}</p>}
-    <div className="mt-4 h-px bg-gradient-to-r from-amber-500/40 via-amber-500/10 to-transparent" />
-  </div>
-);
-
-// ─── Main App ──────────────────────────────────────────────────────────────
-
-const App: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<string>('home');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [scrolled, setScrolled] = useState<boolean>(false);
-  const [formData, setFormData] = useState({ name: '', email: '', message: '' });
-  const [formSent, setFormSent] = useState<boolean>(false);
+// ── Shooting Star ──
+const ShootingStar: React.FC = () => {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ x: 80, y: 10 });
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-      const sections = navSections.map(s => s.id);
-      for (const id of [...sections].reverse()) {
-        const el = document.getElementById(id);
-        if (el && window.scrollY >= el.offsetTop - 100) {
-          setActiveSection(id);
-          break;
-        }
-      }
+    const fire = () => {
+      setPos({ x: Math.random() * 60 + 20, y: Math.random() * 30 + 5 });
+      setVisible(true);
+      setTimeout(() => setVisible(false), 1200);
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    const t = setInterval(fire, 4000 + Math.random() * 3000);
+    return () => clearInterval(t);
   }, []);
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormSent(true);
-    setTimeout(() => setFormSent(false), 3000);
-    setFormData({ name: '', email: '', message: '' });
-  };
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          className="fixed z-10 pointer-events-none"
+          style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+          initial={{ opacity: 0, x: 0, y: 0, scaleX: 0 }}
+          animate={{ opacity: [0, 1, 0], x: -120, y: 60, scaleX: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1, ease: 'easeOut' }}
+        >
+          <div
+            className="w-24 h-[2px] origin-right"
+            style={{ background: 'linear-gradient(90deg, transparent, #fff, #ffd700)' }}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ── Floating Hearts ──
+const FloatingHearts: React.FC = () => {
+  const hearts = useMemo<FloatingHeart[]>(() =>
+    Array.from({ length: 18 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 90 + 5,
+      size: Math.random() * 16 + 10,
+      delay: Math.random() * 8,
+      dur: Math.random() * 6 + 8,
+      color: HEART_COLORS[i % HEART_COLORS.length],
+    })), []);
 
   return (
-    <div className="min-h-screen bg-stone-900 text-white antialiased" style={{ fontFamily: "'Outfit', sans-serif" }}>
+    <>
+      {hearts.map(h => (
+        <motion.div
+          key={h.id}
+          className="fixed pointer-events-none z-20"
+          style={{ left: `${h.x}%`, bottom: '-40px', fontSize: h.size }}
+          initial={{ y: 0, opacity: 0 }}
+          animate={{
+            y: [0, -(window.innerHeight + 80)],
+            opacity: [0, 0.8, 0.8, 0],
+            x: [0, Math.sin(h.id) * 30, -Math.sin(h.id) * 30, 0],
+          }}
+          transition={{
+            duration: h.dur,
+            delay: h.delay,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        >
+          <svg viewBox="0 0 24 24" width={h.size} height={h.size} fill={h.color}>
+            <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
+          </svg>
+        </motion.div>
+      ))}
+    </>
+  );
+};
 
-      {/* Google Font */}
+// ── Confetti Rain ──
+
+// ── Heart Bloom (particle heart shape) ──
+const HeartBloom: React.FC = () => {
+  const particles = useMemo<Particle[]>(() => {
+    const result: Particle[] = [];
+    const isMobile = window.innerWidth < 768;
+    const radius = isMobile ? 70 : 100;
+    const count = isMobile ? 280 : 420;
+    let attempts = 0;
+
+    while (result.length < count && attempts < count * 12) {
+      attempts++;
+      const x = (Math.random() * 2 - 1) * radius;
+      const y = (Math.random() * 2 - 1) * radius;
+      const nx = x / (radius / 1.3);
+      const ny = -y / (radius / 1.3);
+      if (isInsideHeart(nx, ny)) {
+        result.push({
+          id: result.length,
+          x, y,
+          size: Math.random() * 4.5 + 2,
+          color: HEART_COLORS[Math.floor(Math.random() * HEART_COLORS.length)],
+          delay: Math.random() * 2.5 + 2,
+          angle: Math.random() * 360,
+        });
+      }
+    }
+    return result;
+  }, []);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      {particles.map(p => (
+        <motion.div
+          key={p.id}
+          className="absolute rounded-full"
+          initial={{ scale: 0, opacity: 0, x: 0, y: 0 }}
+          animate={{ scale: 1, opacity: 0.9, x: p.x, y: p.y, rotate: p.angle }}
+          transition={{ duration: 1.5, delay: p.delay, type: 'spring', stiffness: 50, damping: 10 }}
+          style={{
+            width: p.size,
+            height: p.size,
+            backgroundColor: p.color,
+            boxShadow: `0 0 6px ${p.color}, 0 0 12px ${p.color}`,
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+// ── Growing Tree ──
+const GrowingTree: React.FC = () => (
+  <svg viewBox="0 0 100 200" className="w-full h-full overflow-visible absolute bottom-0 z-10">
+    {[
+      "M50 200 Q45 160 50 120 Q54 80 32 30 M50 120 Q62 70 85 25",
+      "M38 145 Q22 110 8 85 M62 150 Q82 115 95 88",
+      "M50 170 Q72 148 88 138 M50 95 Q38 58 44 15 M35 55 Q18 30 8 18",
+    ].map((d, i) => (
+      <motion.path
+        key={i} d={d} fill="none"
+        stroke={i === 0 ? '#ffb3c6' : i === 1 ? '#f9a8d4' : '#e879f9'}
+        strokeWidth={i === 0 ? 2.8 : 2}
+        strokeLinecap="round"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 3.5, ease: 'easeInOut', delay: 0.5 + i * 0.3 }}
+        style={{ filter: `drop-shadow(0 0 5px rgba(255,179,198,0.9))` }}
+      />
+    ))}
+  </svg>
+);
+
+
+
+// ── Animated Counter Number ──
+const AnimatedNum: React.FC<{ value: number }> = ({ value }) => {
+  const mv = useMotionValue(0);
+  const rounded = useTransform(mv, v => Math.floor(v));
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const controls = animate(mv, value, { duration: 0.5 });
+    return controls.stop;
+  }, [value]);
+
+  useEffect(() => rounded.on('change', v => setDisplay(v)), [rounded]);
+
+  return (
+    <span
+      className="text-3xl font-black text-white block leading-none"
+      style={{ fontFamily: "'Playfair Display', serif", textShadow: '0 0 20px rgba(255,110,180,0.7)' }}
+    >
+      {display}
+    </span>
+  );
+};
+
+// ── Live Timer ──
+const LiveTimer: React.FC<{ startDate: Date }> = ({ startDate }) => {
+  const [time, setTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    const tick = () => {
+      const diff = Date.now() - startDate.getTime();
+      if (diff > 0) setTime({
+        days: Math.floor(diff / 86400000),
+        hours: Math.floor((diff / 3600000) % 24),
+        minutes: Math.floor((diff / 60000) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      });
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startDate]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 4, duration: 1 }}
+      className="mt-4 rounded-2xl p-4 backdrop-blur-md border border-white/10"
+      style={{ background: 'rgba(10,5,30,0.55)' }}
+    >
+      <p
+        className="text-center text-pink-300 text-xs tracking-[3px] uppercase mb-3 font-semibold"
+        style={{ fontFamily: "'Nunito', sans-serif" }}
+      >
+        Your friendship matters since
+      </p>
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Days', val: time.days },
+          { label: 'Hours', val: time.hours },
+          { label: 'Mins', val: time.minutes },
+          { label: 'Secs', val: time.seconds },
+        ].map(({ label, val }) => (
+          <div
+            key={label}
+            className="flex flex-col items-center rounded-xl py-3 px-1"
+            style={{ background: 'rgba(255,110,180,0.12)', border: '1px solid rgba(255,110,180,0.2)' }}
+          >
+            <AnimatedNum value={val} />
+            <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-1" style={{ fontFamily: "'Nunito', sans-serif" }}>
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+// ── Glowing Moon ──
+const GlowingMoon: React.FC = () => (
+  <motion.div
+    className="fixed top-6 left-4 z-20 pointer-events-none"
+    animate={{ y: [0, -8, 0] }}
+    transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+  >
+    <div
+      className="w-16 h-16 rounded-full"
+      style={{
+        background: 'radial-gradient(circle at 35% 35%, #fffde7, #ffd700 60%, #e6a800)',
+        clipPath: 'ellipse(55% 100% at 70% 50%)',
+        boxShadow: '0 0 40px 10px rgba(255,215,0,0.3)',
+      }}
+    />
+  </motion.div>
+);
+
+// ── Orbiting Hearts around name ──
+const OrbitingHearts: React.FC = () => {
+  const count = 6;
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {Array.from({ length: count }).map((_, i) => {
+        const angle = (i / count) * 360;
+        const r = 70;
+        return (
+          <motion.div
+            key={i}
+            className="absolute text-lg"
+            style={{ left: '50%', top: '50%' }}
+            animate={{ rotate: [angle, angle + 360] }}
+            transition={{ duration: 8 + i, repeat: Infinity, ease: 'linear' }}
+          >
+            <motion.span
+              style={{
+                display: 'block',
+                transform: `translate(-50%, -50%) translateX(${r}px)`,
+              }}
+              animate={{ scale: [1, 1.3, 1] }}
+              transition={{ duration: 2, delay: i * 0.3, repeat: Infinity }}
+            >
+              {['💗', '💖', '💕', '💝', '💓', '💞'][i]}
+            </motion.span>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────
+   MAIN APP
+───────────────────────────────────────────── */
+export default function App() {
+  const [phase, setPhase] = useState<'start' | 'reveal' | 'main'>('start');
+  const [, setConfettiActive] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const handleStart = useCallback(() => {
+    audioRef.current?.play().catch(() => { });
+    if (audioRef.current) audioRef.current.volume = 0.5;
+    setPhase('reveal');
+    setTimeout(() => {
+      setPhase('main');
+      setConfettiActive(true);
+      setTimeout(() => setConfettiActive(false), 8000);
+    }, 2200);
+  }, []);
+
+  return (
+    <div
+      className="relative w-full min-h-[100dvh] overflow-hidden select-none"
+      style={{
+        background: 'linear-gradient(160deg, #020318 0%, #0a0a2e 30%, #0d0520 60%, #12021a 100%)',
+        fontFamily: "'Nunito', sans-serif",
+      }}
+    >
+      {/* Google Fonts */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
-        html { scroll-behavior: smooth; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #1c1917; }
-        ::-webkit-scrollbar-thumb { background: #f59e0b; border-radius: 2px; }
-        .grain::before {
-          content: '';
-          position: fixed; inset: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-          pointer-events: none; z-index: 0; opacity: 0.3;
-        }
-        .glow-amber { box-shadow: 0 0 40px rgba(245,158,11,0.12); }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Nunito:wght@400;600;800&display=swap');
       `}</style>
 
-      {/* Ambient background blobs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-[-10%] right-[-10%] w-72 h-72 bg-amber-500/6 rounded-full blur-3xl" />
-        <div className="absolute bottom-[20%] left-[-10%] w-96 h-96 bg-amber-600/5 rounded-full blur-3xl" />
-      </div>
+      <audio ref={audioRef} src="/aud.mp3" loop />
 
-      {/* ── Navigation ───────────────────────────────── */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-stone-900/95 backdrop-blur-xl shadow-2xl shadow-black/40 border-b border-stone-800' : 'bg-transparent'
-        }`}>
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center">
-              <span className="text-stone-900 font-black text-sm">V</span>
-            </div>
-            <span className="font-bold text-white text-sm hidden sm:block">Vikash K. Apurwa</span>
-          </div>
+      <StarField count={140} />
+      <ShootingStar />
 
-          {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-1 bg-stone-800/80 border border-stone-700/50 rounded-full px-2 py-1">
-            {navSections.map(s => (
-              <NavItem key={s.id} section={s.id} label={s.label} activeSection={activeSection} onClick={() => { }} />
-            ))}
-          </div>
+      {/* ── START SCREEN ── */}
+      <AnimatePresence>
+        {phase === 'start' && (
+          <motion.div
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+            style={{ background: 'radial-gradient(ellipse at 50% 60%, #150a3e 0%, #020318 75%)' }}
+            exit={{ opacity: 0, filter: 'blur(16px)', scale: 1.08 }}
+            transition={{ duration: 1.5, ease: 'easeInOut' }}
+          >
+            <GlowingMoon />
 
-          <div className="flex items-center gap-2">
-            <a href="#contact" className="bg-amber-500 hover:bg-amber-400 text-stone-900 font-bold text-sm px-4 py-2 rounded-full transition-all duration-200 shadow-lg shadow-amber-900/30 hidden sm:block">
-              Hire Me
-            </a>
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden w-10 h-10 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-white"
-            >
-              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-stone-900/98 backdrop-blur-xl border-b border-stone-800 px-4 pb-4">
-            <div className="grid grid-cols-3 gap-2 pt-2">
-              {navSections.map(s => (
-                <a
-                  key={s.id}
-                  href={`#${s.id}`}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`text-center py-2.5 rounded-xl text-sm font-semibold transition-all ${activeSection === s.id
-                      ? 'bg-amber-500 text-stone-900'
-                      : 'bg-stone-800 text-stone-300 hover:text-white'
-                    }`}
-                >
-                  {s.label}
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-      </nav>
-
-      {/* ── Hero ─────────────────────────────────────── */}
-      <FadeSection id="home" className="relative pt-24 pb-12 px-4 min-h-screen flex items-center z-10">
-        <div className="max-w-5xl mx-auto w-full">
-          <div className="flex flex-col items-center text-center gap-6">
-
-            {/* Photo */}
-            <div className="relative">
-              <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-4 border-amber-500/40 shadow-2xl shadow-amber-900/30 glow-amber">
-                <img src={profilePhoto} alt="Vikash Kumar Apurwa" className="w-full h-full object-cover" />
-              </div>
-              <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-400 rounded-full border-2 border-stone-900" title="Available for work" />
-            </div>
-
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-1.5 rounded-full text-sm font-medium">
-              <Zap className="w-3.5 h-3.5" />
-              Ready for Leadership Roles
-            </div>
-
-            {/* Name & Title */}
-            <div>
-              <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-                Vikash Kumar
-                <span className="block text-amber-400">Apurwa</span>
-              </h1>
-              <p className="mt-3 text-stone-400 text-base sm:text-lg font-medium">
-                Sales Professional · Supervisor · Aspiring Sales Manager
-              </p>
-            </div>
-
-            {/* Short bio */}
-            <p className="text-stone-400 text-sm sm:text-base leading-relaxed max-w-lg">
-              Experienced in the marble industry across India, specializing in customer handling, team coordination, and business development. Driven by results and leadership.
-            </p>
-
-            {/* Location */}
-            <div className="flex items-center gap-1.5 text-stone-500 text-sm">
-              <MapPin className="w-4 h-4" />
-              <span>India · Marble Industry</span>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-3 w-full max-w-xs mt-2">
-              {[
-                { value: '4+', label: 'Companies' },
-                { value: '10+', label: 'Yrs Exp.' },
-                { value: '100%', label: 'Dedicated' },
-              ].map(stat => (
-                <div key={stat.label} className="bg-stone-800/70 border border-stone-700/50 rounded-2xl py-3 px-2 text-center">
-                  <p className="text-amber-400 font-black text-lg">{stat.value}</p>
-                  <p className="text-stone-500 text-xs">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* CTAs */}
-            <div className="flex items-center gap-3 mt-2 w-full max-w-xs">
-              <a
-                href="#experience"
-                className="flex-1 bg-amber-500 hover:bg-amber-400 text-stone-900 font-bold text-sm py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-amber-900/30"
-              >
-                View Work <ChevronRight className="w-4 h-4" />
-              </a>
-              <a
-                href="#contact"
-                className="flex-1 bg-stone-800 hover:bg-stone-700 border border-stone-600 text-white font-bold text-sm py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5"
-              >
-                <Mail className="w-4 h-4" /> Contact
-              </a>
-            </div>
-
-          </div>
-        </div>
-      </FadeSection>
-
-      {/* ── Main Content ─────────────────────────────── */}
-      <div className="relative z-10 max-w-5xl mx-auto px-4 pb-20 space-y-16">
-
-        {/* ── About ────── */}
-        <FadeSection id="about">
-          <SectionHeading icon={UserCircle} title="About Me" subtitle="Background & strengths" />
-          <div className="space-y-4">
-            <p className="text-stone-300 text-sm sm:text-base leading-relaxed">
-              I am a dedicated and result-oriented sales professional with strong experience in India's marble industry. Working across multiple organizations, I have managed customer relationships, handled sales operations, and supported team coordination at scale.
-            </p>
-            <p className="text-stone-300 text-sm sm:text-base leading-relaxed">
-              I believe in hard work, discipline, and continuous growth. I am now actively seeking leadership and managerial opportunities where I can apply my experience to drive significant business impact.
-            </p>
-
-            {/* Strengths grid */}
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              {[
-                { icon: TrendingUp, title: 'Sales Growth', desc: 'Proven revenue driver' },
-                { icon: Users, title: 'Team Leader', desc: 'Coordination & management' },
-                { icon: Star, title: 'Client Focus', desc: 'Lasting relationships' },
-                { icon: Target, title: 'Goal Oriented', desc: 'Results that matter' },
-              ].map(strength => (
-                <div key={strength.title} className="bg-stone-800/60 border border-stone-700/50 rounded-2xl p-4 hover:border-amber-500/30 transition-all">
-                  <strength.icon className="w-5 h-5 text-amber-400 mb-2" />
-                  <p className="text-white font-bold text-sm">{strength.title}</p>
-                  <p className="text-stone-400 text-xs mt-0.5">{strength.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </FadeSection>
-
-        {/* ── Experience ────── */}
-        <FadeSection id="experience">
-          <SectionHeading icon={Briefcase} title="Experience" subtitle="Professional career journey" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {experienceData.map((exp, i) => (
-              <ExperienceCard key={i} {...exp} />
-            ))}
-          </div>
-        </FadeSection>
-
-        {/* ── Education ────── */}
-        <FadeSection id="education">
-          <SectionHeading icon={GraduationCap} title="Education" subtitle="Academic qualifications" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {educationData.map((edu, i) => (
-              <EducationCard key={i} {...edu} />
-            ))}
-          </div>
-        </FadeSection>
-
-        {/* ── Skills & Languages ────── */}
-        <FadeSection id="skills">
-          <SectionHeading icon={Award} title="Skills & More" subtitle="What I bring to the table" />
-
-          <div className="space-y-6">
-            {/* Skills */}
-            <div>
-              <p className="text-stone-400 text-xs font-semibold uppercase tracking-widest mb-3">Core Skills</p>
-              <div className="flex flex-wrap gap-2">
-                {skills.map(skill => (
-                  <span
-                    key={skill}
-                    className="bg-stone-800/80 border border-stone-600/50 text-stone-200 text-sm font-medium px-3.5 py-1.5 rounded-full hover:border-amber-500/40 hover:text-amber-300 transition-all cursor-default"
-                  >
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Languages & Interests side by side */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-stone-800/60 border border-stone-700/50 rounded-2xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Globe2 className="w-4 h-4 text-amber-400" />
-                  <p className="text-white font-bold text-sm">Languages</p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {languages.map(l => (
-                    <span key={l} className="bg-stone-700/60 text-stone-300 text-xs px-2.5 py-1 rounded-full">{l}</span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-stone-800/60 border border-stone-700/50 rounded-2xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <BookOpen className="w-4 h-4 text-amber-400" />
-                  <p className="text-white font-bold text-sm">Interests</p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {interests.map(i => (
-                    <span key={i} className="bg-stone-700/60 text-stone-300 text-xs px-2.5 py-1 rounded-full">{i}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Personal Details */}
-            <div className="bg-stone-800/60 border border-stone-700/50 rounded-2xl p-5">
-              <p className="text-stone-400 text-xs font-semibold uppercase tracking-widest mb-1">Personal Profile</p>
-              <div className="divide-y divide-stone-700/40">
-                <DetailItem icon={CalendarDays} label="Date of Birth" value="02 March 1993" />
-                <DetailItem icon={Heart} label="Marital Status" value="Unmarried" />
-                <DetailItem icon={Flag} label="Nationality" value="Indian" />
-                <DetailItem icon={Target} label="Religion" value="Hindu" />
-                <DetailItem icon={Scale} label="Gender" value="Male" />
-                <DetailItem icon={Briefcase} label="Driving License" value="Yes" />
-              </div>
-            </div>
-
-            {/* Salary expectation */}
-            <div className="bg-gradient-to-r from-amber-500/10 to-stone-800/60 border border-amber-500/20 rounded-2xl p-5 flex items-center justify-between">
-              <div>
-                <p className="text-stone-400 text-xs font-medium">Expected Salary</p>
-                <p className="text-amber-400 text-xs mt-0.5">+ Allowances & Bonus</p>
-              </div>
-              <div className="text-right">
-                <p className="text-white font-black text-2xl">₹65,000</p>
-                <p className="text-stone-400 text-xs">per month</p>
-              </div>
-            </div>
-          </div>
-        </FadeSection>
-
-        {/* ── Contact ────── */}
-        <FadeSection id="contact">
-          <SectionHeading icon={Mail} title="Let's Connect" subtitle="Reach out for opportunities" />
-
-          <div className="space-y-4">
-            {/* Direct contact cards */}
-            <div className="grid grid-cols-2 gap-3">
-              <a
-                href="tel:9079875155"
-                className="group bg-stone-800/60 border border-stone-700/50 rounded-2xl p-4 hover:border-amber-500/40 transition-all text-center"
-              >
-                <Phone className="w-6 h-6 text-amber-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-stone-400 text-xs mb-1">Phone</p>
-                <p className="text-white font-bold text-sm">9079875155</p>
-              </a>
-              <a
-                href="mailto:vikashapurwa@gmail.com"
-                className="group bg-stone-800/60 border border-stone-700/50 rounded-2xl p-4 hover:border-amber-500/40 transition-all text-center"
-              >
-                <Mail className="w-6 h-6 text-amber-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-stone-400 text-xs mb-1">Email</p>
-                <p className="text-white font-bold text-xs break-all">vikashapurwa@gmail.com</p>
-              </a>
-            </div>
-
-            {/* Contact form */}
-            <div className="bg-stone-800/60 border border-stone-700/50 rounded-2xl p-5">
-              <p className="text-white font-bold text-base mb-4">Send a Message</p>
-              <form onSubmit={handleFormSubmit} className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Your Name"
-                  value={formData.name}
-                  onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                  required
-                  className="w-full bg-stone-900/60 border border-stone-600/50 rounded-xl px-4 py-3 text-white text-sm placeholder-stone-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all"
-                />
-                <input
-                  type="email"
-                  placeholder="Your Email"
-                  value={formData.email}
-                  onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                  required
-                  className="w-full bg-stone-900/60 border border-stone-600/50 rounded-xl px-4 py-3 text-white text-sm placeholder-stone-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all"
-                />
-                <textarea
-                  placeholder="Your Message"
-                  rows={4}
-                  value={formData.message}
-                  onChange={e => setFormData(p => ({ ...p, message: e.target.value }))}
-                  required
-                  className="w-full bg-stone-900/60 border border-stone-600/50 rounded-xl px-4 py-3 text-white text-sm placeholder-stone-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all resize-none"
-                />
-                <button
-                  type="submit"
-                  className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200 shadow-lg ${formSent
-                      ? 'bg-green-500 text-white shadow-green-900/30'
-                      : 'bg-amber-500 hover:bg-amber-400 text-stone-900 shadow-amber-900/30'
-                    }`}
-                >
-                  {formSent ? (
-                    <><Check className="w-4 h-4" /> Sent!</>
-                  ) : (
-                    <><Send className="w-4 h-4" /> Send Message</>
-                  )}
-                </button>
-              </form>
-            </div>
-
-            {/* Signature */}
-            <div className="flex justify-center pt-2">
-              <img
-                src={signaturePhoto}
-                alt="Signature"
-                className="h-14 opacity-60 invert"
+            {/* Floating balloons on start */}
+            {[
+              { color: 'radial-gradient(circle at 35% 30%,#ffb3d9,#ff2d78)', left: '8%', size: 52, dur: 7, delay: 0 },
+              { color: 'radial-gradient(circle at 35% 30%,#d8b4fe,#7c3aed)', left: '78%', size: 44, dur: 9, delay: 1.5 },
+              { color: 'radial-gradient(circle at 35% 30%,#fef08a,#f59e0b)', left: '50%', size: 36, dur: 8, delay: 3 },
+            ].map((b, i) => (
+              <motion.div
+                key={i}
+                className="fixed rounded-full pointer-events-none"
+                style={{
+                  width: b.size, height: b.size * 1.1,
+                  background: b.color,
+                  left: b.left, bottom: '10%',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                }}
+                animate={{ y: [0, -(window.innerHeight * 1.2)] }}
+                transition={{ duration: b.dur, delay: b.delay, repeat: Infinity, ease: 'easeInOut' }}
               />
-            </div>
-          </div>
-        </FadeSection>
-      </div>
+            ))}
 
-      {/* ── Footer ───────────────────────────────────── */}
-      <footer className="relative z-10 border-t border-stone-800 py-8 px-4 text-center">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center">
-              <span className="text-stone-900 font-black text-xs">V</span>
+            {/* Stars raining down subtly */}
+            {Array.from({ length: 8 }).map((_, i) => (
+              <motion.div
+                key={i}
+                className="fixed text-yellow-200 pointer-events-none text-xs"
+                style={{ left: `${10 + i * 12}%`, top: 0 }}
+                animate={{ y: '110vh', opacity: [0, 0.7, 0], rotate: 360 }}
+                transition={{ duration: 5 + i, delay: i * 0.8, repeat: Infinity, ease: 'linear' }}
+              >
+                ✦
+              </motion.div>
+            ))}
+
+            <motion.div
+              className="flex flex-col items-center gap-3 px-8 text-center"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.3 }}
+            >
+              <motion.span
+                className="text-5xl"
+                animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.2, 1] }}
+                transition={{ duration: 3, repeat: Infinity }}
+              >
+                🎂
+              </motion.span>
+
+              <p
+                className="text-pink-300/70 text-xs tracking-[4px] uppercase font-semibold"
+              >
+                A special surprise for
+              </p>
+
+              <h1
+                className="text-5xl font-black text-transparent bg-clip-text leading-tight"
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  backgroundImage: 'linear-gradient(135deg, #ff6eb4 0%, #c084fc 50%, #ffd700 100%)',
+                  filter: 'drop-shadow(0 0 20px rgba(255,110,180,0.5))',
+                }}
+              >
+                Khushi
+              </h1>
+              <h2
+                className="text-2xl font-bold text-white/70"
+                style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic' }}
+              >
+                Bansal
+              </h2>
+
+              <p className="text-white/40 text-xs mt-1">from Ritik Apurwa 🤍</p>
+
+              <motion.button
+                onClick={handleStart}
+                className="mt-6 px-10 py-4 rounded-full text-white font-bold text-lg relative overflow-hidden"
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  background: 'linear-gradient(135deg, #ff2d78, #c084fc)',
+                  boxShadow: '0 0 40px rgba(255,45,120,0.5), 0 4px 20px rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                }}
+                whileHover={{ scale: 1.06, boxShadow: '0 0 60px rgba(255,45,120,0.7)' }}
+                whileTap={{ scale: 0.95 }}
+                animate={{ boxShadow: ['0 0 30px rgba(255,45,120,0.4)', '0 0 60px rgba(255,45,120,0.7)', '0 0 30px rgba(255,45,120,0.4)'] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <span className="relative z-10">Open Your Gift 🎁</span>
+                {/* shimmer */}
+                <motion.span
+                  className="absolute inset-0 rounded-full"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)' }}
+                  animate={{ x: ['-100%', '200%'] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1 }}
+                />
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── REVEAL TRANSITION ── */}
+      <AnimatePresence>
+        {phase === 'reveal' && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ background: 'radial-gradient(ellipse at center, #ff2d7840 0%, #0a0a2e 70%)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.3 }}
+            transition={{ duration: 0.8 }}
+          >
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: [0, 1.5, 1], rotate: [0, 20, 0] }}
+              transition={{ duration: 1.5, ease: 'backOut' }}
+              className="text-8xl"
+            >
+              💖
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MAIN SCENE ── */}
+      <AnimatePresence>
+        {phase === 'main' && (
+          <motion.div
+            className="relative min-h-[100dvh] w-full z-10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.5 }}
+          >
+            <FloatingHearts />
+
+            <GlowingMoon />
+
+            {/* Glowing orbs background */}
+            <div
+              className="fixed top-1/4 right-0 w-64 h-64 rounded-full pointer-events-none"
+              style={{ background: 'radial-gradient(circle, rgba(192,132,252,0.08) 0%, transparent 70%)', filter: 'blur(40px)' }}
+            />
+            <div
+              className="fixed bottom-1/4 left-0 w-64 h-64 rounded-full pointer-events-none"
+              style={{ background: 'radial-gradient(circle, rgba(255,45,120,0.08) 0%, transparent 70%)', filter: 'blur(40px)' }}
+            />
+
+            <div className="relative z-10 flex flex-col items-center px-5 pb-16">
+
+              {/* ── NAME HEADER ── */}
+              <motion.div
+                className="w-full text-center pt-10 pb-2 relative"
+                initial={{ opacity: 0, y: -30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 1 }}
+              >
+                <motion.p
+                  className="text-pink-300/60 text-[10px] tracking-[5px] uppercase font-semibold mb-1"
+                >
+                  ✦ Happy Birthday ✦
+                </motion.p>
+
+                {/* Orbiting hearts */}
+                <div className="relative inline-block">
+                  <div className="relative w-48 h-16 mx-auto">
+                    <OrbitingHearts />
+                    <h1
+                      className="absolute inset-0 flex items-center justify-center text-4xl font-black text-transparent bg-clip-text"
+                      style={{
+                        fontFamily: "'Playfair Display', serif",
+                        backgroundImage: 'linear-gradient(135deg, #ff6eb4, #ffd700 50%, #c084fc)',
+                        filter: 'drop-shadow(0 0 25px rgba(255,110,180,0.6))',
+                      }}
+                    >
+                      Khushi 👑
+                    </h1>
+                  </div>
+                </div>
+
+                <motion.p
+                  className="text-white/40 text-xs mt-1 italic"
+                  style={{ fontFamily: "'Playfair Display', serif" }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1 }}
+                >
+                  May your day be as bright as you are
+                </motion.p>
+              </motion.div>
+
+              {/* ── DIVIDER ── */}
+
+
+              {/* ── TREE & HEART BLOOM ── */}
+              <motion.div
+                className="relative w-48 h-60 md:w-64 md:h-72 my-2"
+                style={{ marginTop: '10px' }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+              >
+                <GrowingTree />
+                <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56">
+                  <HeartBloom />
+                </div>
+              </motion.div>
+
+              {/* ── TIMER ── */}
+              <div className="w-full max-w-sm">
+                <LiveTimer startDate={RELATIONSHIP_START} />
+              </div>
+
+              {/* ── FOOTER ── */}
+              <motion.div
+                className="mt-8 text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 4 }}
+              >
+                <p className="text-white/30 text-xs tracking-widest uppercase mb-1">with all the warmth,</p>
+                <p
+                  className="text-2xl font-black text-transparent bg-clip-text"
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    backgroundImage: 'linear-gradient(135deg, #ff6eb4, #c084fc)',
+                  }}
+                >
+                  Ritik Apurwa 🤍
+                </p>
+                <motion.div
+                  className="flex gap-2 justify-center mt-3 text-xl"
+                  animate={{ y: [0, -5, 0] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  🌸 💖 🌸
+                </motion.div>
+              </motion.div>
+
             </div>
-            <span className="text-stone-400 text-sm font-medium">Vikash Kumar Apurwa</span>
-          </div>
-          <p className="text-stone-600 text-xs">&copy; {new Date().getFullYear()} · Sales Professional · Built for Growth</p>
-          <div className="flex justify-center gap-4 mt-4">
-            <a href="mailto:vikashapurwa@gmail.com" className="text-stone-500 hover:text-amber-400 transition-colors">
-              <Mail className="w-4 h-4" />
-            </a>
-            <a href="tel:9079875155" className="text-stone-500 hover:text-amber-400 transition-colors">
-              <Phone className="w-4 h-4" />
-            </a>
-          </div>
-        </div>
-      </footer>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
-};
-
-export default App;
+}
